@@ -1,9 +1,7 @@
 <?php
 
-use App\Models\User;
-use Illuminate\Auth\Events\Registered;
+use App\Auth\RedisUserProvider;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules;
 use Livewire\Attributes\Layout;
 use Livewire\Volt\Component;
@@ -22,13 +20,19 @@ new #[Layout('layouts.guest')] class extends Component
     {
         $validated = $this->validate([
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
+            'email' => ['required', 'string', 'lowercase', 'email', 'max:255'],
             'password' => ['required', 'string', 'confirmed', Rules\Password::defaults()],
         ]);
 
-        $validated['password'] = Hash::make($validated['password']);
+        $provider = app(RedisUserProvider::class);
 
-        event(new Registered($user = User::create($validated)));
+        if ($provider->findByEmail($validated['email'])) {
+            $this->addError('email', __('validation.unique', ['attribute' => 'email']));
+
+            return;
+        }
+
+        $user = $provider->create($validated['name'], $validated['email'], $validated['password']);
 
         Auth::login($user);
 

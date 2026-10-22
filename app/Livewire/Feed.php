@@ -2,8 +2,10 @@
 
 namespace App\Livewire;
 
-use App\Models\Like;
-use App\Models\Post;
+use App\Auth\RedisUserProvider;
+use App\Repositories\LikeRepository;
+use App\Repositories\PostRepository;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -25,30 +27,19 @@ class Feed extends Component
 
     public int $loaded = 10;
 
-    public function mount(): void
-    {
-        //
-    }
-
     public function share(): void
     {
         $this->validate();
 
         $disk = config('filesystems.default');
-
         $extension = $this->image->getClientOriginalExtension() ?: 'jpg';
         $path = 'posts/'.Str::uuid().'.'.$extension;
 
         Storage::disk($disk)->put($path, file_get_contents($this->image->getRealPath()), 'public');
 
-        Auth::user()->posts()->create([
-            'body' => $this->body,
-            'image_path' => $path,
-            'image_disk' => $disk,
-        ]);
+        app(PostRepository::class)->create(Auth::id(), $this->body, $path, $disk);
 
         $this->reset(['body', 'image']);
-
         $this->loaded = max($this->loaded, $this->perPage);
     }
 
@@ -59,45 +50,46 @@ class Feed extends Component
 
     public function toggleLike(int $postId): void
     {
-        $userId = Auth::id();
-
-        $existing = Like::where('user_id', $userId)->where('post_id', $postId)->first();
-
-        if ($existing) {
-            $existing->delete();
-        } else {
-            Like::create(['user_id' => $userId, 'post_id' => $postId]);
-        }
+        app(LikeRepository::class)->toggle(Auth::id(), $postId);
     }
 
     public function deletePost(int $postId): void
     {
-        $post = Post::findOrFail($postId);
+        $posts = app(PostRepository::class);
+        $post = $posts->find($postId);
 
-        abort_unless($post->user_id === Auth::id(), 403);
+        abort_if($post === null, 404);
+        abort_unless((int) $post['user_id'] === Auth::id(), 403);
 
-        $post->delete();
+        $posts->delete($postId);
     }
 
     public function render()
     {
-        $posts = Post::query()
-            ->with('user')
-            ->withCount('likes')
-            ->latest()
-            ->take($this->loaded + 1)
-            ->get();
+        $postRepository = app(PostRepository::class);
+        $likeRepository = app(LikeRepository::class);
+        $users = app(RedisUserProvider::class);
 
-        $hasMore = $posts->count() > $this->loaded;
+        [$feed, $hasMore] = $postRepository->paginate($this->loaded);
 
-        $posts = $posts->take($this->loaded);
+        $userNames = [];
+        foreach ($feed as $post) {
+            $userId = (int) $post['user_id'];
+            $userNames[$userId] ??= $users->retrieveById($userId)?->name ?? 'Unknown';
+        }
 
-        $userId = Auth::id();
+        $postIds = array_map(fn ($post) => (int) $post['id'], $feed);
+        $likedPostIds = $likeRepository->likedPostIds(Auth::id(), $postIds);
 
-        $likedPostIds = Like::where('user_id', $userId)
-            ->whereIn('post_id', $posts->pluck('id'))
-            ->pluck('post_id')
-            ->all();
+        $posts = array_map(fn ($post) => [
+            'id' => (int) $post['id'],
+            'user_id' => (int) $post['user_id'],
+            'user_name' => $userNames[(int) $post['user_id']],
+            'body' => $post['body'],
+            'image_url' => Storage::disk($post['image_disk'])->url($post['image_path']),
+            'created_at' => Carbon::createFromTimestamp((int) $post['created_at']),
+            'likes_count' => $likeRepository->count((int) $post['id']),
+        ], $feed);
 
         return view('livewire.feed', [
             'posts' => $posts,

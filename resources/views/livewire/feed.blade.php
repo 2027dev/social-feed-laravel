@@ -33,16 +33,16 @@
 
     <div class="space-y-6" id="feed-posts">
         @forelse ($posts as $post)
-            <div wire:key="post-{{ $post->id }}" class="bg-white shadow-sm rounded-lg overflow-hidden">
+            <div wire:key="post-{{ $post['id'] }}" class="bg-white shadow-sm rounded-lg overflow-hidden">
                 <div class="p-4 flex items-center justify-between">
                     <div>
-                        <p class="font-semibold text-gray-900">{{ $post->user->name }}</p>
-                        <p class="text-xs text-gray-400">{{ $post->created_at->diffForHumans() }}</p>
+                        <p class="font-semibold text-gray-900">{{ $post['user_name'] }}</p>
+                        <p class="text-xs text-gray-400">{{ $post['created_at']->diffForHumans() }}</p>
                     </div>
 
-                    @if ($post->user_id === auth()->id())
+                    @if ($post['user_id'] === auth()->id())
                         <button
-                            wire:click="deletePost({{ $post->id }})"
+                            wire:click="deletePost({{ $post['id'] }})"
                             wire:confirm="Delete this post?"
                             class="text-xs text-red-500 hover:text-red-700"
                         >
@@ -51,23 +51,23 @@
                     @endif
                 </div>
 
-                @if ($post->body)
-                    <p class="px-4 pb-3 text-gray-800 whitespace-pre-line">{{ $post->body }}</p>
+                @if ($post['body'])
+                    <p class="px-4 pb-3 text-gray-800 whitespace-pre-line">{{ $post['body'] }}</p>
                 @endif
 
-                <img src="{{ $post->imageUrl() }}" class="w-full max-h-[32rem] object-cover" loading="lazy" />
+                <img src="{{ $post['image_url'] }}" class="w-full max-h-[32rem] object-cover" loading="lazy" />
 
                 <div class="p-4 flex items-center gap-2">
                     <button
-                        wire:click="toggleLike({{ $post->id }})"
-                        wire:key="like-btn-{{ $post->id }}"
-                        class="inline-flex items-center gap-1 text-sm font-medium {{ in_array($post->id, $likedPostIds) ? 'text-rose-600' : 'text-gray-500' }} hover:text-rose-600"
+                        wire:click="toggleLike({{ $post['id'] }})"
+                        wire:key="like-btn-{{ $post['id'] }}"
+                        class="inline-flex items-center gap-1 text-sm font-medium {{ in_array($post['id'], $likedPostIds) ? 'text-rose-600' : 'text-gray-500' }} hover:text-rose-600"
                     >
-                        <span>{{ in_array($post->id, $likedPostIds) ? '♥' : '♡' }}</span>
-                        <span>{{ in_array($post->id, $likedPostIds) ? 'Liked' : 'Like' }}</span>
+                        <span>{{ in_array($post['id'], $likedPostIds) ? '♥' : '♡' }}</span>
+                        <span>{{ in_array($post['id'], $likedPostIds) ? 'Liked' : 'Like' }}</span>
                     </button>
 
-                    <span class="text-sm text-gray-500">{{ $post->likes_count }} {{ \Illuminate\Support\Str::plural('like', $post->likes_count) }}</span>
+                    <span class="text-sm text-gray-500">{{ $post['likes_count'] }} {{ \Illuminate\Support\Str::plural('like', $post['likes_count']) }}</span>
                 </div>
             </div>
         @empty
